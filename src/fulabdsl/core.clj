@@ -2,12 +2,18 @@
   (:use
    [clojure.test :refer [deftest run-tests is]]
    )
+  #_(:require
+    )
+  )
+
+(require 
+    '[regexpforobj.core] :reload
   )
 
 (defn main
   "I don't do a whole lot."
   []
-  (println "Hello, World!")
+  (println "Hello, Peter!" regexpforobj.core/the-var)
   (run-tests 'fulabdsl.core)
   )
 
