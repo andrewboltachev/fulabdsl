@@ -9,6 +9,7 @@
                   [adzerk/boot-reload        "0.2.6"]
                   [fipp "0.5.2"]
                   [regexpforobj "1.0.0-alpha2-SNAPSHOT"]
+                  [org.clojure/core.typed "0.3.18"]
                   ]
   :source-paths    #{"src"}
   )
