@@ -34,9 +34,8 @@
 # bar
 # buz
 word1
-  text1
-  text2
-  text3
+  [trn]foo [p]shrt.[/p][/trn]
+  [lang1][/lang1] [lang2][/lang2]
   
 word2
   text1
@@ -56,6 +55,7 @@ word2
       lines-to-header-and-body
       :body
       body-to-articles
+      parse-body-lines-of-articles
       )
     )
   )
@@ -117,8 +117,17 @@ word2
                       )
                      )
         annotated-body (map
-          #(let [value (line-value %)]
-             (InputChar (token-type value) {:value value :line-no (line-no %)})
+          #(let [value (line-value %)
+                 current-token-type (token-type value)]
+             (InputChar current-token-type [(line-no %)
+                                            (if (= current-token-type :body-line)
+                                              (clojure.string/replace
+                                                value
+                                                #"^\t"
+                                                ""
+                                                )
+                                              value)
+                                                                    ])
              )
           body
           )
@@ -150,7 +159,7 @@ word2
                          (= (:payload x) :article)
                          (let [v (:value x)]
                            [
-                            (-> x :value first :payload :value)
+                            (-> x :value first :payload line-value)
                             (map :payload (-> x :value second :value))
                             ]
                            )
@@ -169,5 +178,32 @@ word2
       (assoc result :step :body-to-articles)
       (mywalk result)
       )
+    )
+  )
+
+(defn r0001 [s]
+  (let [r #"[\n]|\[\w+\]|\[\/\w+\]"
+        a (clojure.string/split s r)
+        b (re-seq r s)
+        m (apply max (map count [a b]))
+
+        to-length #(loop [x %1] (if-not (= (count x) %2) (recur (conj x "")) x))
+        a (to-length a m)
+        b (to-length b m)
+        ]
+    (interleave
+      a
+      b
+      )
+    )
+  )
+
+
+(defn parse-body-lines-of-articles [articles]
+  (map
+   #(update % 1
+            (fn [lines] (map line-value lines))
+            ) 
+    articles
     )
   )
