@@ -10,6 +10,8 @@
                               grammar_pretty
                               is_parsing_error?
                               ]]
+    [fulabdsl.recursive-descent :refer [
+                                        recursive-descent-maker]]
    )
   #_(:require
     )
@@ -26,7 +28,7 @@
     '[regexpforobj.core] :reload
   )
 
-(declare lines-to-header-and-body body-to-articles)
+(declare parse-fulabdsl-lines)
 
 (def test-data
   ; ...
@@ -35,6 +37,7 @@
 # buz
 word1
   [trn]foo [p]shrt.[/p][/trn]
+  [lang1][/lang1] [lang2][/lang2]
   [lang1][/lang1] [lang2][/lang2]
   
 word2
@@ -49,13 +52,8 @@ word2
   (
    ;identity
    fipp
-    (->
+    (parse-fulabdsl-lines
       test-data
-      ;ifipp
-      lines-to-header-and-body
-      :body
-      body-to-articles
-      parse-body-lines-of-articles
       )
     )
   )
@@ -78,7 +76,7 @@ word2
     )
   )
 
-(defn lines-to-header-and-body [lines]
+(defn lines-to-header-and-body1 [lines]
   (let [lines (map-indexed
                 (fn
                   [number line]
@@ -100,7 +98,15 @@ word2
   )
 
 
+(defn lines-to-header-and-body [lines]
+  (let [{header :header body :body} (lines-to-header-and-body1 lines)]
+    (with-meta body {:header header}) 
+    )
+  )
+
+
 (defn body-to-articles [body]
+  ;(println "body-to-articles called")
   (let [
         token-type (fn [line] (cond
                       (empty? line)
@@ -175,13 +181,17 @@ word2
                  )
         ]
     (if (is_parsing_error? result)
-      (assoc result :step :body-to-articles)
+      result ;(assoc result :step :body-to-articles)
       (mywalk result)
       )
     )
   )
 
-(defn r0001 [s]
+
+; --------------- tag parsing -------------
+
+(defn- r0001 [s]
+  ;(println "got s" s)
   (let [r #"[\n]|\[\w+\]|\[\/\w+\]"
         a (clojure.string/split s r)
         b (re-seq r s)
@@ -198,12 +208,142 @@ word2
     )
   )
 
+(defn- is_tag? [x]
+  (and
+    (> (count x) 2)
+    (= (first x) \[)
+    (= (last x) \])
+    )
+  )
+
+(defn- is_opening_tag? [x]
+  (and
+    (is_tag? x)
+    (not= (second x) \/)
+    )
+  )
+
+(defn- is_closing_tag? [x]
+  (and
+    (is_tag? x)
+    (= (second x) \/)
+    )
+  )
+
+(defn- clear-tag-brackets [tag]
+  (->
+    tag
+    (clojure.string/replace "[/" "")
+    (clojure.string/replace "[" "")
+    (clojure.string/replace "]" "")
+    )
+  )
+
+(defn r0002 [body]
+  (mapv
+    (fn [x]
+      (cond
+        (is_opening_tag? x)
+        (InputChar :open (clear-tag-brackets x))
+
+        (is_closing_tag? x)
+        (InputChar :clse (clear-tag-brackets x))
+
+        :else
+        (InputChar :text x)
+        )
+      )
+      body
+    )
+  )
+
 
 (defn parse-body-lines-of-articles [articles]
+  ;(println "parse-body-lines-of-articles called")
   (map
-   #(update % 1
-            (fn [lines] (map line-value lines))
-            ) 
+   (fn [article] (update article 1
+            (fn [lines] (map #(do
+                                [(line-no %)
+                                (->
+                                  %
+                                  line-value
+                                  r0001
+                                  r0002
+                                  ((recursive-descent-maker (fn [beg end]
+                                                              (if-not (= beg end)
+                                                                {:error :open-close-tags-mismatch
+                                                                          :context [beg end]
+                                                                          }
+                                                              ))))
+                                  )
+                                 ]
+                                  ) lines))
+            ))
     articles
+    )
+  )
+
+; ---------- error checkers / steps -----------
+(def steps-names
+        (apply hash-map [
+   lines-to-header-and-body :lines-to-header-and-body
+   body-to-articles :body-to-articles
+   parse-body-lines-of-articles :parse-body-lines-of-articles
+   ])
+  )
+
+(def steps-data
+  [
+   [lines-to-header-and-body #(do % false)]
+   [body-to-articles (fn [x] (when (is_parsing_error? x) x))]
+   [parse-body-lines-of-articles
+    (fn [s] 
+      (let [articles (map second s)
+            x (mapcat identity articles)
+            x (filter (comp map? :value) (map #(do {:line-no (line-no %) :value (line-value %)}) x))
+            x (filter (comp is_parsing_error? :value) x)
+            x (map #(do (assoc (:value %) :line-no (:line-no %))) x)
+            ]
+        (when-not (empty? x)
+             {:error :multiple :context x}
+          )
+        )
+      )
+    ] ; (fn [x] (when (is_parsing_error? x) x)) ; TODO
+   ]
+  )
+
+(def steps steps-data)
+
+; ---------- composing function -----------
+
+
+(defn parse-fulabdsl-lines [lines]
+  (loop
+    [
+     [head & tail] steps
+      data lines
+     ]
+    (let [[func & [error-checker]] head
+          step-name (steps-names func)]
+
+      (if (nil? head)
+        data
+        (let [data (func data)
+              error-info (error-checker data)]
+          (if error-info
+            (assoc error-info :step step-name)
+            (do
+              ;(fipp data)
+              ;(newline)
+              (recur
+              tail
+              data
+              )
+              )
+            )
+          )
+        )
+      )
     )
   )
