@@ -54,6 +54,7 @@ word2
    fipp
     (parse-fulabdsl-lines
       test-data
+      ;:tag-compare-fn #(do %1 %2 {:error :error})
       )
     )
   )
@@ -98,14 +99,14 @@ word2
   )
 
 
-(defn lines-to-header-and-body [lines]
+(defn lines-to-header-and-body [lines & options]
   (let [{header :header body :body} (lines-to-header-and-body1 lines)]
     (with-meta body {:header header}) 
     )
   )
 
 
-(defn body-to-articles [body]
+(defn body-to-articles [body & options]
   ;(println "body-to-articles called")
   (let [
         token-type (fn [line] (cond
@@ -258,7 +259,7 @@ word2
   )
 
 
-(defn parse-body-lines-of-articles [articles]
+(defn parse-body-lines-of-articles [articles & options]
   ;(println "parse-body-lines-of-articles called")
   (map
    (fn [article] (update article 1
@@ -269,12 +270,10 @@ word2
                                   line-value
                                   r0001
                                   r0002
-                                  ((recursive-descent-maker (fn [beg end]
-                                                              (if-not (= beg end)
-                                                                {:error :open-close-tags-mismatch
-                                                                          :context [beg end]
-                                                                          }
-                                                              ))))
+                                  ((recursive-descent-maker
+                                     (:tag-compare-fn (apply hash-map options))
+                                     )
+                                   )
                                   )
                                  ]
                                   ) lines))
@@ -317,29 +316,54 @@ word2
 
 ; ---------- composing function -----------
 
+; TODO: line-preprocess-fn, tag-compare-fn ("inner" replacements?)
+; join-lines (проверка что не осталось не-тегов)
+; apply-grammar
+; post-check
+; 
+; creating grammar...
+(defn parse-fulabdsl-lines [lines & options]
+  ;
+  (let [options (apply hash-map options)
+        ; assign default
+        _ (println options)
+        options (merge 
+                  {:tag-compare-fn
+                   (fn [beg end]
+                                                            (if-not (= beg end)
+                                                              {:error :tags-mismatch
+                                                               :context [beg end]
+                                                               }
+                                                              )
+                                                            )
+                   }
+                  options)
+        _ (println options)
+        options (mapcat identity options)
+        _ (println options)
+        ]
+    (loop
+      [
+      [head & tail] steps
+        data lines
+      ]
+      (let [[func & [error-checker]] head
+            step-name (steps-names func)]
 
-(defn parse-fulabdsl-lines [lines]
-  (loop
-    [
-     [head & tail] steps
-      data lines
-     ]
-    (let [[func & [error-checker]] head
-          step-name (steps-names func)]
-
-      (if (nil? head)
-        data
-        (let [data (func data)
-              error-info (error-checker data)]
-          (if error-info
-            (assoc error-info :step step-name)
-            (do
-              ;(fipp data)
-              ;(newline)
-              (recur
-              tail
-              data
-              )
+        (if (nil? head)
+          data
+          (let [data (apply func data options)
+                error-info (error-checker data)]
+            (if error-info
+              (assoc error-info :step step-name)
+              (do
+                ;(fipp data)
+                ;(newline)
+                (recur
+                tail
+                data
+                )
+                )
               )
             )
           )
