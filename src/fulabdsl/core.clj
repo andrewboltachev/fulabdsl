@@ -55,6 +55,7 @@ word2
     (parse-fulabdsl-lines
       test-data
       ;:tag-compare-fn #(do %1 %2 {:error :error})
+      :line-first-level-process-fn (comp list #(do {:tag "text" :value %}))
       )
     )
   )
@@ -259,6 +260,26 @@ word2
   )
 
 
+(defn Y [f]
+    (#(% %) #(f (fn [& args] (apply (% %) args)))))
+
+(defn- process-article-line-tree [process-transducer]
+  (Y (fn [f] (fn [s] (cond (sequential? s) (transduce process-transducer conj (map f s)) (map? s) (into {} (map (fn [x] (update x 1 (fn [v] (f v))))) s) :else s))))
+  )
+
+
+(defn- process-article-line-first-level [s process-fn]
+  (mapcat (fn [x]
+         (cond
+           (string? x)
+           (process-fn x)
+
+           :else
+           [x])
+         ) s)
+  )
+
+
 (defn parse-body-lines-of-articles [articles & options]
   ;(println "parse-body-lines-of-articles called")
   (map
@@ -274,6 +295,37 @@ word2
                                      (:tag-compare-fn (apply hash-map options))
                                      )
                                    )
+                                  
+                                  #_((fn [article & a]
+(println "article" article)
+(newline)
+(println "a" a)
+(newline)
+(newline)
+                                            ""
+                                            #_(update article 1 (fn [line]
+                                                                            
+                                                                    [(line-no line)
+                                                                     (line-value line)]
+                                                                    ))) articles)
+                                  #_((clear-and-postprocess-article-lines
+                                    identity))
+                                  ((process-article-line-tree
+                                    ;(filter (fn [x] (not (and (string? x) (partial re-matches #"^\s*$" x)))))
+                                     (filter (partial not= ""))
+                                    ))
+
+                                  (process-article-line-first-level
+                                    (fn [x] (if
+                                              (re-matches #"^\s*$" x)
+                                              []
+                                              [x]
+                                              ))
+                                    )
+                                  (process-article-line-first-level
+                                     (:line-first-level-process-fn (apply hash-map options))
+                                    )
+                                   
                                   )
                                  ]
                                   ) lines))
@@ -282,12 +334,21 @@ word2
     )
   )
 
+(defn join-lines-tags [articles & options]
+  (map
+   (fn [article] (update article 1
+                         (fn [lines] (mapcat line-value lines))
+                         ))
+    articles)
+  )
+
 ; ---------- error checkers / steps -----------
 (def steps-names
         (apply hash-map [
    lines-to-header-and-body :lines-to-header-and-body
    body-to-articles :body-to-articles
    parse-body-lines-of-articles :parse-body-lines-of-articles
+   join-lines-tags :join-lines-tags
    ])
   )
 
@@ -309,6 +370,21 @@ word2
         )
       )
     ] ; (fn [x] (when (is_parsing_error? x) x)) ; TODO
+   [join-lines-tags
+    ;(fn [& _] false)
+    (fn [s] 
+      (let [x (into {} (comp (map (fn [[k v]]
+                                       [k (filter string? v)]
+                                       ))
+                             (filter (comp not empty? second))
+                             ) s)
+            ]
+        (when-not (empty? x)
+             {:error :multiple :context x}
+          )
+        )
+      )
+    ]
    ]
   )
 
@@ -326,7 +402,6 @@ word2
   ;
   (let [options (apply hash-map options)
         ; assign default
-        _ (println options)
         options (merge 
                   {:tag-compare-fn
                    (fn [beg end]
@@ -336,11 +411,10 @@ word2
                                                                }
                                                               )
                                                             )
+                   :line-first-level-process-fn identity
                    }
                   options)
-        _ (println options)
         options (mapcat identity options)
-        _ (println options)
         ]
     (loop
       [
