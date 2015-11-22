@@ -3,6 +3,7 @@
    [clojure.test :refer [deftest run-tests is]]
    [regexpforobj.core :refer [
                               InputChar
+                              Or
                               Seq
                               Star
                               Char
@@ -56,6 +57,7 @@ word2
       test-data
       ;:tag-compare-fn #(do %1 %2 {:error :error})
       :line-first-level-process-fn (comp list #(do {:tag "text" :value %}))
+      :grammar (Or [(Star (Seq [(Char "trn") (Star (Seq [(Char "lang1") (Char "lang2")]))])) (Char "text")])
       )
     )
   )
@@ -342,6 +344,33 @@ word2
     articles)
   )
 
+(defn apply-grammar [articles & options]
+  (let [grammar (:grammar (apply hash-map options))]
+    (loop [[head & tail] articles
+           result []]
+      (let [[word & [article-body]] head]
+        (if
+          (nil? head)
+          result
+          (let [input (map #(InputChar (:tag %) (:value %)) article-body)
+                parsed (run grammar input)]
+            (if (is_parsing_error? parsed)
+              (if-not (:error parsed)
+                (assoc parsed :error :empty-grammar)
+                (assoc parsed :article word)
+                )
+              (recur
+                tail
+                (conj result parsed)
+                )
+              )
+            )
+          )
+        )
+      )
+    )
+  )
+
 ; ---------- error checkers / steps -----------
 (def steps-names
         (apply hash-map [
@@ -349,6 +378,7 @@ word2
    body-to-articles :body-to-articles
    parse-body-lines-of-articles :parse-body-lines-of-articles
    join-lines-tags :join-lines-tags
+   apply-grammar :apply-grammar
    ])
   )
 
@@ -385,6 +415,8 @@ word2
         )
       )
     ]
+   [apply-grammar
+    (fn [x] (when (is_parsing_error? x) x))]
    ]
   )
 
@@ -412,6 +444,7 @@ word2
                                                               )
                                                             )
                    :line-first-level-process-fn identity
+                   :grammar nil
                    }
                   options)
         options (mapcat identity options)
