@@ -1,4 +1,4 @@
-(ns fulabdsl.recursive-descent)
+(ns fulab.zarnidict.fulabdsl.recursive-descent)
 (use 'regexpforobj.core)
 
 (defn recursive-descent-inner [x r f]

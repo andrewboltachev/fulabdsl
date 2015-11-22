@@ -1,4 +1,4 @@
-(ns fulabdsl.core
+(ns fulab.zarnidict.fulabdsl.core
   (:use
    [clojure.test :refer [deftest run-tests is]]
    [regexpforobj.core :refer [
@@ -11,7 +11,7 @@
                               grammar_pretty
                               is_parsing_error?
                               ]]
-    [fulabdsl.recursive-descent :refer [
+    [fulab.zarnidict.fulabdsl.recursive-descent :refer [
                                         recursive-descent-maker]]
    )
   #_(:require

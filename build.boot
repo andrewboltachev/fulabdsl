@@ -33,7 +33,7 @@
 
 (use '[ns-tracker.core :only [ns-tracker]])
 (require '[adzerk.boot-reload :refer [reload]])
-(require '[fulabdsl.core])
+(require '[fulab.zarnidict.fulabdsl.core])
 
 (deftask wrap-reload
   "Reload namespaces of modified files before the request is passed to the
