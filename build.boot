@@ -55,7 +55,7 @@
 (deftask main
   []
   (with-pre-wrap fileset
-    (fulabdsl.core/main)
+    (fulab.zarnidict.fulabdsl.core/main)
     fileset
     )
   )
