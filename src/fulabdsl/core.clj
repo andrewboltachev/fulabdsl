@@ -57,7 +57,7 @@ word2
       test-data
       ;:tag-compare-fn #(do %1 %2 {:error :error})
       :line-first-level-process-fn (comp list #(do {:tag "text" :value %}))
-      :grammar (Or [(Star (Seq [(Char "trn") (Star (Seq [(Char "lang1") (Char "lang2")]))])) (Char "text")])
+      :grammar (Or [(Star (Seq [(Char "trn") (Star (Seq [(Char "lang1") (Char "lang2")]))] {:fn :value})) (Char "text")] {:fn :value})
       )
     )
   )
@@ -361,7 +361,7 @@ word2
                 )
               (recur
                 tail
-                (conj result parsed)
+                (conj result [word parsed])
                 )
               )
             )
@@ -369,6 +369,22 @@ word2
         )
       )
     )
+  )
+
+(defn apply-transform-fns [articles & options]
+  (map (fn [[word article-body]]
+         [word
+          (clojure.walk/postwalk
+            (fn [x]
+              (if-let [f (and (map? x) (-> x :payload :fn))]
+                (f x)
+                x
+                )
+              )
+            article-body)
+          ]
+         )
+         articles)
   )
 
 ; ---------- error checkers / steps -----------
@@ -379,6 +395,7 @@ word2
    parse-body-lines-of-articles :parse-body-lines-of-articles
    join-lines-tags :join-lines-tags
    apply-grammar :apply-grammar
+   apply-transform-fns :apply-transform-fns
    ])
   )
 
@@ -417,6 +434,7 @@ word2
     ]
    [apply-grammar
     (fn [x] (when (is_parsing_error? x) x))]
+   [apply-transform-fns #(do % false)]
    ]
   )
 
