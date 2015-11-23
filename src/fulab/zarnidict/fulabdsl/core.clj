@@ -43,9 +43,21 @@ word1
   
 word2
   text1
+  
+word3
+  [trn]1. foo [p]shrt.[/p][/trn]
+  [trn]1) foo [p]shrt.[/p][/trn]
+  [lang1]3-1-1[/lang1] [lang2][/lang2]
+  [lang1][/lang1] [lang2][/lang2]
+  [trn]2) foo [p]shrt.[/p][/trn]
+  [trn]2. bar [p]shrt.[/p][/trn]
   " #"  " (str \tab)))
   )
 
+
+                              #_(reduce or
+                                      [[x]]
+                                      )
 (defn main
   []
   (println "Hello, Peter!" (InputChar :aa))
@@ -57,7 +69,38 @@ word2
       test-data
       ;:tag-compare-fn #(do %1 %2 {:error :error})
       :line-first-level-process-fn (comp list #(do {:tag "text" :value %}))
-      :grammar (Or [(Star (Seq [(Char "trn") (Star (Seq [(Char "lang1") (Char "lang2")]))] {:fn :value})) (Char "text")] {:fn :value})
+      :transform-tags-fn (fn [x]
+                           (let [v (:value x)
+                                 fv (first v)]
+                            (if (and
+                                  (= (:tag x) "trn")
+                                  (not (empty? v))
+                                  (string? fv)
+                                  )
+                              (reduce #(do
+                                        (println "one and two" %1 %2)
+                                        (or %1 %2))
+                                      (ifipp (reverse (cons [x] (map (fn [[tag-name e]]
+                                             (if-let [n (re-find e fv)]
+                                               [{:tag tag-name
+                                                 :value n
+                                                 }
+                                                {:tag "trn"
+                                                 :value (subs fv (count n))
+                                                 }]
+                                               ))
+                                           {"N" #"^\d+\. " "P" #"^\d+\u0029 "}))))
+                                      )
+                               [x]
+                             )
+                             )
+                           )
+      :grammar (Or [
+                    (Star (Seq [(Star (Char "N"))
+                                (Star (Char "P"))
+                                  (Char "trn") (Star (Seq [(Char "lang1") (Char "lang2")]))] {:fn :value}))
+                    (Char "text")] {:fn :value})
+      :grammar1 (Char "trn")
       )
     )
   )
@@ -342,10 +385,26 @@ word2
 (defn join-lines-tags [articles & options]
   (map
    (fn [article] (update article 1
-                         (fn [lines] (mapcat line-value lines))
+                         (fn [lines]
+                           (mapcat
+                                       line-value
+                                       lines)
+     )
                          ))
     articles)
   )
+
+(defn transform-tags [articles & options]
+  (map
+   (fn [article] (update article 1
+                         (fn [lines]
+                           (mapcat (:transform-tags-fn (apply hash-map options))
+                                   lines)
+                         )))
+    articles)
+  )
+
+
 
 (defn apply-grammar [articles & options]
   (let [grammar (:grammar (apply hash-map options))]
@@ -397,6 +456,7 @@ word2
    body-to-articles :body-to-articles
    parse-body-lines-of-articles :parse-body-lines-of-articles
    join-lines-tags :join-lines-tags
+   transform-tags :transform-tags
    apply-grammar :apply-grammar
    apply-transform-fns :apply-transform-fns
    ])
@@ -422,6 +482,21 @@ word2
     ] ; (fn [x] (when (is_parsing_error? x) x)) ; TODO
    [join-lines-tags
     ;(fn [& _] false)
+    (fn [s] 
+      (let [x (into {} (comp (map (fn [[k v]]
+                                       [k (filter string? v)]
+                                       ))
+                             (filter (comp not empty? second))
+                             ) s)
+            ]
+        (when-not (empty? x)
+             {:error :multiple :context x}
+          )
+        )
+      )
+    ]
+   [transform-tags
+    ; FIXME: эти одинаковые
     (fn [s] 
       (let [x (into {} (comp (map (fn [[k v]]
                                        [k (filter string? v)]
@@ -465,6 +540,7 @@ word2
                                                               )
                                                             )
                    :line-first-level-process-fn (comp list identity)
+                   :transform-tags-fn (comp list identity)
                    :grammar nil
                    }
                   options)
