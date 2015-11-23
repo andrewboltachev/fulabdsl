@@ -271,14 +271,17 @@ word2
 
 
 (defn- process-article-line-first-level [s process-fn]
-  (mapcat (fn [x]
-         (cond
-           (string? x)
-           (process-fn x)
+  (if (is_parsing_error? s)
+    s
+    (mapcat (fn [x]
+          (cond
+            (string? x)
+            (process-fn x)
 
-           :else
-           [x])
-         ) s)
+            :else
+            [x])
+          ) s)
+    )
   )
 
 
@@ -461,7 +464,7 @@ word2
                                                                }
                                                               )
                                                             )
-                   :line-first-level-process-fn identity
+                   :line-first-level-process-fn (comp list identity)
                    :grammar nil
                    }
                   options)
