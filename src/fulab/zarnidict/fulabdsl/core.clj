@@ -98,7 +98,17 @@ word3
       :grammar (Or [
                     (Star (Seq [(Star (Char "N"))
                                 (Star (Char "P"))
-                                  (Char "trn") (Star (Seq [(Char "lang1") (Char "lang2")]))] {:fn :value}))
+                                  (Char "trn") (Star (Seq [(Char "lang1"
+                                                                 
+                                                                 ) (Char "lang2")]
+                                                          
+                                                          {:fn (fn [x]
+                                                                 (str
+                                                                 (str "<span>" (-> x :value first :value) "</span>")
+                                                                 (str "<span>" (-> x :value second :value) "</span>")
+                                                                   )
+                                                                 )}
+                                                          ) {:fn (comp (partial reduce str) :value)})] {:fn :value}))
                     (Char "text")] {:fn :value})
       :grammar1 (Char "trn")
       )
