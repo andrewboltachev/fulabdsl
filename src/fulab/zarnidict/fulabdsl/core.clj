@@ -460,7 +460,7 @@ word3
   )
 
 ; ---------- error checkers / steps -----------
-(def steps-names
+(def steps-names-short
         (apply hash-map [
    lines-to-header-and-body :lines-to-header-and-body
    body-to-articles :body-to-articles
@@ -470,6 +470,14 @@ word3
    apply-grammar :apply-grammar
    apply-transform-fns :apply-transform-fns
    ])
+  )
+
+(def steps-names
+        (merge
+          steps-names-short
+          (apply hash-map [
+   apply-transform-fns :apply-transform-fns
+   ]))
   )
 
 (def steps-data
@@ -526,6 +534,57 @@ word3
    ]
   )
 
+(def steps-data-short
+  [
+   [lines-to-header-and-body #(do % false)]
+   [body-to-articles (fn [x] (when (is_parsing_error? x) x))]
+   [parse-body-lines-of-articles
+    (fn [s] 
+      (let [articles (map second s)
+            x (mapcat identity articles)
+            x (filter (comp map? :value) (map #(do {:line-no (line-no %) :value (line-value %)}) x))
+            x (filter (comp is_parsing_error? :value) x)
+            x (map #(do (assoc (:value %) :line-no (:line-no %))) x)
+            ]
+        (when-not (empty? x)
+             {:error :multiple :context x}
+          )
+        )
+      )
+    ] ; (fn [x] (when (is_parsing_error? x) x)) ; TODO
+   [join-lines-tags
+    ;(fn [& _] false)
+    (fn [s] 
+      (let [x (into {} (comp (map (fn [[k v]]
+                                       [k (filter string? v)]
+                                       ))
+                             (filter (comp not empty? second))
+                             ) s)
+            ]
+        (when-not (empty? x)
+             {:error :multiple :context x}
+          )
+        )
+      )
+    ]
+   [transform-tags
+    ; FIXME: эти одинаковые
+    (fn [s] 
+      (let [x (into {} (comp (map (fn [[k v]]
+                                       [k (filter string? v)]
+                                       ))
+                             (filter (comp not empty? second))
+                             ) s)
+            ]
+        (when-not (empty? x)
+             {:error :multiple :context x}
+          )
+        )
+      )
+    ]
+   ]
+  )
+
 (def steps steps-data)
 
 ; ---------- composing function -----------
@@ -536,6 +595,7 @@ word3
 ; post-check
 ; 
 ; creating grammar...
+
 (defn parse-fulabdsl-lines [lines & options]
   ;
   (let [options (apply hash-map options)
@@ -559,6 +619,57 @@ word3
     (loop
       [
       [head & tail] steps
+        data lines
+      ]
+      (let [[func & [error-checker]] head
+            step-name (steps-names func)]
+
+        (if (nil? head)
+          data
+          (let [data (apply func data options)
+                error-info (error-checker data)]
+            (if error-info
+              (assoc error-info :step step-name)
+              (do
+                ;(fipp data)
+                ;(newline)
+                (recur
+                tail
+                data
+                )
+                )
+              )
+            )
+          )
+        )
+      )
+    )
+  )
+
+
+(defn parse-fulabdsl-lines-short [lines & options]
+  ;
+  (let [options (apply hash-map options)
+        ; assign default
+        options (merge 
+                  {:tag-compare-fn
+                   (fn [beg end]
+                                                            (if-not (= beg end)
+                                                              {:error :tags-mismatch
+                                                               :context [beg end]
+                                                               }
+                                                              )
+                                                            )
+                   :line-first-level-process-fn (comp list identity)
+                   :transform-tags-fn (comp list identity)
+                   :grammar nil
+                   }
+                  options)
+        options (mapcat identity options)
+        ]
+    (loop
+      [
+      [head & tail] steps-data-short
         data lines
       ]
       (let [[func & [error-checker]] head
