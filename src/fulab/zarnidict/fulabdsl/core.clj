@@ -467,8 +467,6 @@ word3
    parse-body-lines-of-articles :parse-body-lines-of-articles
    join-lines-tags :join-lines-tags
    transform-tags :transform-tags
-   apply-grammar :apply-grammar
-   apply-transform-fns :apply-transform-fns
    ])
   )
 
@@ -476,6 +474,7 @@ word3
         (merge
           steps-names-short
           (apply hash-map [
+   apply-grammar :apply-grammar
    apply-transform-fns :apply-transform-fns
    ]))
   )
