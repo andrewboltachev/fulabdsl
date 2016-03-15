@@ -416,6 +416,24 @@ word3
 
 
 
+(defn convert-into-input-chars [articles & options]
+  (loop [[head & tail] articles
+          result []]
+    (let [[word & [article-body]] head]
+      (if
+        (nil? head)
+        result
+        (let [input (map #(InputChar (:tag %) (:value %)) article-body)]
+          (recur
+            tail
+            (conj result [word input])
+            )
+          )
+        )
+      )
+    )
+  )
+
 (defn apply-grammar [articles & options]
   (let [grammar (:grammar (apply hash-map options))]
     (loop [[head & tail] articles
@@ -424,8 +442,7 @@ word3
         (if
           (nil? head)
           result
-          (let [input (map #(InputChar (:tag %) (:value %)) article-body)
-                parsed (run grammar input)]
+          (let [parsed (run grammar article-body)]
             (if (is_parsing_error? parsed)
               (if-not (:error parsed)
                 (assoc parsed :error :empty-grammar)
@@ -467,6 +484,7 @@ word3
    parse-body-lines-of-articles :parse-body-lines-of-articles
    join-lines-tags :join-lines-tags
    transform-tags :transform-tags
+   convert-into-input-chars :convert-into-input-chars
    ])
   )
 
@@ -527,6 +545,7 @@ word3
         )
       )
     ]
+   [convert-into-input-chars #(do % false)]
    [apply-grammar
     (fn [x] (when (is_parsing_error? x) x))]
    [apply-transform-fns #(do % false)]
@@ -581,6 +600,7 @@ word3
         )
       )
     ]
+   [convert-into-input-chars #(do % false)]
    ]
   )
 
